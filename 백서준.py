@@ -29,7 +29,7 @@ MODEL = "gemini-2.5-flash"
 
 # Initialize session state for history
 if "history" not in st.session_state:
-st.session_state.history = [] # list of (role, text)
+    st.session_state.history = [] # list of (role, text)
 
 
 # UI layout: left column for chat, right column for controls/history
@@ -110,4 +110,5 @@ st.write(f"{role}: {text[:120]}{'...' if len(text)>120 else ''}")
 
 def stream_gemini_sse(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> Generator[str, None, None]:
 return json.dumps(j)
+
 
