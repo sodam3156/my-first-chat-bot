@@ -4,7 +4,7 @@ import requests
 import json
 
 # Streamlit secrets에서 API 키 가져오기
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY = st.secrets["AIzaSyAYKx91V10uejbYvPBubodXJwnNQYnYJ9M"]
 GEMINI_API_URL = "https://api.generative.google.com/v1beta2/models/gemini-2.5-flash:generateContent"
 
 # 세션 상태 초기화
@@ -66,3 +66,4 @@ for chat in st.session_state.history:
         st.markdown(f"**You:** {chat['content']}")
     else:
         st.markdown(f"**Bot:** {chat['content']}")
+
