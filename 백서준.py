@@ -154,4 +154,10 @@ def generate_gemini_once(prompt: str, api_key: str, model: str = "gemini-2.5-fla
         if txt:
             return txt
         return json.dumps(j)
+my-first-chat-bot/
+ ├─ chatbot_minimal.py
+ └─ .streamlit/
+     └─ secrets.toml
+GEMINI_API_KEY = "AIzaSyAYKx91V10uejbYvPBubodXJwnNQYnYJ9M"
+
 
