@@ -19,8 +19,8 @@ st.title("Gemini Chat — gemini-2.5-flash (Streamlit)")
 
 # Load API key from Streamlit secrets
 if "GEMINI_API_KEY" not in st.secrets:
-st.error("Streamlit secret 'GEMINI_API_KEY' not found. Put your Gemini API key in .streamlit/secrets.toml")
-st.stop()
+    st.error("Streamlit secret 'GEMINI_API_KEY' not found. Put your Gemini API key in .streamlit/secrets.toml")
+    st.stop()
 
 
 API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -110,3 +110,4 @@ st.write(f"{role}: {text[:120]}{'...' if len(text)>120 else ''}")
 
 def stream_gemini_sse(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> Generator[str, None, None]:
 return json.dumps(j)
+
