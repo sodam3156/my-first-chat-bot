@@ -1,162 +1,68 @@
 # streamlit_gemini_chatbot.py
-# Streamlit chatbot that calls Google Gemini (gemini-2.5-flash).
-# - Uses Streamlit secrets for the GEMINI_API_KEY (do NOT hardcode keys).
-# - Attempts SSE streaming via the Gemini streamGenerateContent endpoint.
-# - Falls back to a single-response generateContent if streaming isn't available.
-# Requirements:
-#   pip install streamlit requests
-
 import streamlit as st
 import requests
 import json
-from typing import Generator
 
-st.set_page_config(page_title="Gemini Chat (gemini-2.5-flash)", layout="wide")
-st.title("Gemini Chat — gemini-2.5-flash (Streamlit)")
+# Streamlit secrets에서 API 키 가져오기
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_URL = "https://api.generative.google.com/v1beta2/models/gemini-2.5-flash:generateContent"
 
-# Load API key from Streamlit secrets
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Streamlit secret 'GEMINI_API_KEY' not found. Put your Gemini API key in .streamlit/secrets.toml")
-    st.stop()
-
-API_KEY = st.secrets["GEMINI_API_KEY"]
-MODEL = "gemini-2.5-flash"
-
-# Initialize session state for history
+# 세션 상태 초기화
 if "history" not in st.session_state:
-    st.session_state.history = []  # list of (role, text)
+    st.session_state.history = []
 
-# UI layout: left column for chat, right column for controls/history
-col1, col2 = st.columns([3, 1])
+st.title("💬 Gemini Chatbot")
 
-with col1:
-    # Display conversation
-    chat_container = st.container()
-    with chat_container:
-        for role, text in st.session_state.history:
-            if role == "user":
-                st.markdown(f"**You:** {text}")
-            else:
-                st.markdown(f"**Assistant:** {text}")
+# 사용자 입력
+user_input = st.text_input("메시지를 입력하세요:", key="input")
 
-    # Input area
-    prompt = st.text_input("Enter a message and press Enter", key="prompt_input")
-
-    if prompt:
-        # Add user message
-        st.session_state.history.append(("user", prompt))
-
-        # Rerender messages including new user message
-        chat_container.empty()
-        with chat_container:
-            for role, text in st.session_state.history:
-                if role == "user":
-                    st.markdown(f"**You:** {text}")
-                else:
-                    st.markdown(f"**Assistant:** {text}")
-
-        # Prepare assistant placeholder
-        assistant_placeholder = st.empty()
-        assistant_text = ""
-        assistant_placeholder.markdown("**Assistant:** _thinking..._")
-
-        # Try streaming first
-        try:
-            for chunk in stream_gemini_sse(prompt, api_key=API_KEY, model=MODEL):
-                assistant_text += chunk
-                assistant_placeholder.markdown(f"**Assistant:** {assistant_text}")
-            st.session_state.history.append(("assistant", assistant_text))
-        except Exception as e:
-            assistant_placeholder.markdown(f"**Assistant:** _stream failed, falling back..._\n\n`{e}`")
-            try:
-                text = generate_gemini_once(prompt, api_key=API_KEY, model=MODEL)
-                st.session_state.history.append(("assistant", text))
-                assistant_placeholder.markdown(f"**Assistant:** {text}")
-            except Exception as e2:
-                assistant_placeholder.markdown(f"**Assistant:** _error: {e2}_")
-
-        # Clear prompt input
-        st.session_state.prompt_input = ""
-
-with col2:
-    st.header("Conversation history")
-    if st.button("Clear conversation"):
-        st.session_state.history = []
-        st.experimental_rerun()
-    for role, text in st.session_state.history[::-1]:
-        st.write(f"{role}: {text[:120]}{'...' if len(text)>120 else ''}")
-
-
-# ----------------------
-# Helper functions
-# ----------------------
-
-def stream_gemini_sse(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> Generator[str, None, None]:
-    """Call the Gemini streamGenerateContent SSE endpoint and yield text chunks."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+def generate_response(user_message):
     headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": api_key,
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
+        "Content-Type": "application/json"
     }
+
     payload = {
-        "contents": [
-            {"parts": [{"text": prompt}]}
-        ]
+        "prompt": [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_message}]
+            }
+        ],
+        "temperature": 0.7,
+        "candidate_count": 1,
     }
 
-    with requests.post(url, headers=headers, json=payload, stream=True, timeout=60) as resp:
-        resp.raise_for_status()
-        for raw_line in resp.iter_lines(decode_unicode=True):
-            if not raw_line:
-                continue
-            line = raw_line.strip()
-            if line.startswith("data:"):
-                data_str = line[len("data:"):].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    obj = json.loads(data_str)
-                except Exception:
-                    continue
-                chunk_text = ""
-                for cand in obj.get("candidates", []):
-                    content = cand.get("content") or {}
-                    parts = content.get("parts") if isinstance(content, dict) else None
-                    if parts:
-                        for p in parts:
-                            t = p.get("text")
-                            if t:
-                                chunk_text += t
-                if not chunk_text:
-                    try:
-                        chunk_text = obj.get('candidates', [])[0].get('content', {}).get('parts', [])[0].get('text', '')
-                    except Exception:
-                        chunk_text = ""
-                if chunk_text:
-                    yield chunk_text
-
-
-def generate_gemini_once(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> str:
-    """Non-streaming generateContent call."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": api_key,
-    }
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    resp = requests.post(url, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
-    j = resp.json()
     try:
-        return j["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception:
-        txt = j.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
-        if txt:
-            return txt
-        return json.dumps(j)
+        # 스트리밍 방식 시도
+        with requests.post(GEMINI_API_URL, headers=headers, data=json.dumps(payload), stream=True) as r:
+            r.raise_for_status()
+            response_text = ""
+            for line in r.iter_lines():
+                if line:
+                    decoded_line = line.decode("utf-8")
+                    # 여기서 실제 응답 부분을 파싱해야 함
+                    response_text += decoded_line
+            return response_text
+    except Exception as e:
+        st.error(f"스트리밍 실패: {e}\n일반 요청으로 시도합니다.")
+        # 스트리밍 불가 시 일반 요청
+        r = requests.post(GEMINI_API_URL, headers=headers, data=json.dumps(payload))
+        r.raise_for_status()
+        resp_json = r.json()
+        # 모델 응답 파싱 (모델 구조에 따라 수정 필요)
+        return resp_json.get("candidates", [{}])[0].get("content", [{}])[0].get("text", "")
 
-my-first-chat-bot/
- ├─ streamlit_gemini_chatbot.py
- └─ .streamlit/GEMINI_API_KEY = "AIzaSyAYKx91V10uejbYvPBubodXJwnNQYnYJ9M"
+# 메시지 전송 처리
+if user_input:
+    st.session_state.history.append({"role": "user", "content": user_input})
+    bot_response = generate_response(user_input)
+    st.session_state.history.append({"role": "assistant", "content": bot_response})
+    st.experimental_rerun()
 
-
+# 이전 대화 표시
+for chat in st.session_state.history:
+    if chat["role"] == "user":
+        st.markdown(f"**You:** {chat['content']}")
+    else:
+        st.markdown(f"**Bot:** {chat['content']}")
