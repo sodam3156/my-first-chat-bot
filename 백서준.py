@@ -5,14 +5,12 @@
 # - Falls back to a single-response generateContent if streaming isn't available.
 # Requirements:
 # pip install streamlit requests
-# Optional (if you prefer advanced SSE parsing): pip install sseclient-py
 
 
 import streamlit as st
 import requests
 import json
-import time
-from typing import Generator, Optional
+from typing import Generator
 
 
 st.set_page_config(page_title="Gemini Chat (gemini-2.5-flash)", layout="wide")
@@ -56,7 +54,9 @@ prompt = st.text_input("Enter a message and press Enter", key="prompt_input")
 if prompt:
 # Add user message
 st.session_state.history.append(("user", prompt))
-# Re-render messages quickly (user message)
+
+
+# Rerender messages including new user message
 chat_container.empty()
 with chat_container:
 for role, text in st.session_state.history:
@@ -76,12 +76,9 @@ assistant_placeholder.markdown("**Assistant:** _thinking..._")
 try:
 for chunk in stream_gemini_sse(prompt, api_key=API_KEY, model=MODEL):
 assistant_text += chunk
-# update placeholder with partial content
 assistant_placeholder.markdown(f"**Assistant:** {assistant_text}")
-# streaming finished
 st.session_state.history.append(("assistant", assistant_text))
 except Exception as e:
-# Streaming failed -> fallback to normal generate
 assistant_placeholder.markdown(f"**Assistant:** _stream failed, falling back..._\n\n`{e}`")
 try:
 text = generate_gemini_once(prompt, api_key=API_KEY, model=MODEL)
@@ -91,7 +88,7 @@ except Exception as e2:
 assistant_placeholder.markdown(f"**Assistant:** _error: {e2}_")
 
 
-# clear prompt input
+# Clear prompt input
 st.session_state.prompt_input = ""
 
 
@@ -108,3 +105,8 @@ st.write(f"{role}: {text[:120]}{'...' if len(text)>120 else ''}")
 
 # ----------------------
 # Helper functions
+# ----------------------
+
+
+def stream_gemini_sse(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> Generator[str, None, None]:
+return json.dumps(j)
